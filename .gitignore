@@ -1,0 +1,13 @@
+# dependencies (the plugin is installed from source via `link:`, never vendored)
+node_modules/
+
+# macOS
+.DS_Store
+._*
+
+# local logs / env / editor state
+*.log
+.env
+.env.*
+.vscode/
+.idea/

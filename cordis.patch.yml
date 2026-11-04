@@ -1,0 +1,6 @@
+# dsh-my-newhome bundle patch — one row, dual-face.
+# The row `name` MUST equal the package name: the client-modules node half
+# resolves `require.resolve('<row-name>/package.json')` to find the browser bundle.
+- insert:
+    - id: dsh-my-newhome
+      name: 'dsh-my-newhome'

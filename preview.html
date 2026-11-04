@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>dsh-my-newhome 预览</title>
+<style>
+  :root { 
+  --dsw-alias-bg-base:#131417;
+  --dsw-alias-bg-layer-1:#191b20;
+  --dsw-alias-bg-layer-2:#1f2228;
+  --dsw-alias-bg-layer-3:#262a31;
+  --dsw-alias-label-primary:#e9eaee;
+  --dsw-alias-label-secondary:#a8aeba;
+  --dsw-alias-label-tertiary:#767c88;
+  --dsw-alias-border-l1:#23262c;
+  --dsw-alias-border-l2:#2f333b;
+  --dsw-alias-border-l3:#3d434e;
+  --dsw-alias-brand-primary:#4d6bfe;
+  --dsw-alias-button-primary-fill:#4d6bfe;
+  --dsw-alias-state-business-primary:#7aa2ff;
+  --dsw-alias-interactive-bg-hover:#1e2127;
+  --dsw-alias-settings-card-fill:#191b20;
+  --dsh-composer-card-max-width:760px;
+  --dsh-font-family-text:"SF Pro Text",-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;
+ }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary);
+         font-family: var(--dsh-font-family-text); -webkit-font-smoothing: antialiased; }
+  .frame { display: grid; grid-template-columns: 236px 1fr; height: 100vh; }
+  .sidebar { border-right: 1px solid var(--dsw-alias-border-l1); padding: 14px 12px; display: flex; flex-direction: column; gap: 6px; }
+  .sidebar-brand { display: flex; align-items: center; gap: 8px; padding: 4px 6px 12px; }
+  .dshh-sidebar-mark { width: 22px; height: 22px; border-radius: 6px; background: linear-gradient(135deg,#4d6bfe,#9b6bff); }
+  .side-item { height: 30px; border-radius: 8px; display: flex; align-items: center; padding: 0 10px;
+               font-size: 12.5px; color: var(--dsw-alias-label-secondary); }
+  .side-item.active { background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary); }
+  .main { display: flex; flex-direction: column; min-width: 0; }
+  .stage { flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 0 24px 6vh; }
+  .hero-brand { display: flex; justify-content: center; margin-bottom: 10px; }
+  .dshh-hero-logo { width: 72px; height: 72px; border-radius: 18px; background: linear-gradient(135deg,#4d6bfe,#9b6bff); }
+  .headline { text-align: center; font-size: 28px; font-weight: 600; letter-spacing: .5px; margin: 4px 0 22px; }
+  .composer-stack { display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 760px; margin: 0 auto; }
+  .composer-card { border: 1px solid var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-layer-1);
+                   border-radius: 16px; padding: 14px 16px 10px; min-height: 96px; display: flex; flex-direction: column; justify-content: space-between; }
+  .composer-input { font-size: 14px; color: var(--dsw-alias-label-tertiary); }
+  .composer-actions { display: flex; justify-content: flex-end; gap: 8px; }
+  .pill { height: 26px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--dsw-alias-border-l2);
+          font-size: 12px; color: var(--dsw-alias-label-secondary); display: inline-flex; align-items: center; }
+</style>
+<style id="plugin-css">
+#dshh-bg{position:fixed;inset:-24px;z-index:-1;pointer-events:none;background-repeat:no-repeat;background-position:center center;transform:translateZ(0)}
+#dshh-bg::after{content:"";position:absolute;inset:0;background:rgba(0,0,0,var(--dshh-dim,.28))}
+html[data-dshh-bg] body,html[data-dshh-bg] #root,html[data-dshh-bg] #app{background:transparent!important}
+html[data-dshh-bg],html[data-dshh-bg] body{--dsw-alias-bg-base:transparent!important}
+/* keep the brand-mark slot (our logo lives inside the headline row) and drop only the text parts */
+html[data-dshh-hide-tagline] [class*="headline"] > :not(:has(.dshh-hero-logo)){display:none!important}
+html[data-dshh-hide-tagline] [class*="previewBadge"]{display:none!important}
+/* The composer stack only carries the hero marker while the new-session hero is on
+   screen, so this keeps the homepage decks out of every existing conversation. */
+html[data-dshh-hero-only] [class*="composerStack"]:not([class*="composerHero"]) .dshh-deck,
+html[data-dshh-hero-only] [class*="composerStack"]:not([class*="composerHero"]) .dshh-footer{display:none!important}
+
+.dshh-deck{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;box-sizing:border-box;
+  width:min(var(--dshh-deck-width,var(--dsh-composer-card-max-width,760px)),100%);
+  margin:0 auto;padding:0}
+/* One explicit stacking ladder so every deck has a stable seat: hero -> workspace deck ->
+   widget deck -> links -> the harness mode/workspace row -> composer. */
+[class*="composerStack"] > :first-child{order:-7}
+.dshh-deck{order:-6;margin-bottom:6px}
+.dshh-deck-widgets{order:-5;margin-bottom:6px}
+.dshh-deck-links{order:-4;margin-bottom:0}
+[class*="heroWorkspaceRow"]{order:-3}
+.dshh-deck.dshh-below{order:999}
+/* Section caption: quiet, one line, spans the whole grid row; the small refresh control
+   for the widget deck sits at the right end of that same line. */
+.dshh-deck-head{grid-column:1/-1;display:flex;align-items:center;gap:8px;
+  margin:0 2px -2px;font-size:11px;font-weight:500;
+  line-height:14px;letter-spacing:.4px;color:var(--dsw-alias-label-tertiary,#767c88)}
+.dshh-deck-head-text{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dshh-deck-refresh{flex:none;display:grid;place-items:center;width:16px;height:16px;margin:-1px 0;padding:0;
+  border:0;border-radius:5px;background:transparent;color:inherit;cursor:pointer;font:inherit;font-size:11px;
+  line-height:1;transition:background .12s,color .12s}
+.dshh-deck-refresh:hover{background:color-mix(in srgb,var(--dsw-alias-label-primary,#e9eaee) 9%,transparent);
+  color:var(--dsw-alias-label-secondary,#a8aeba)}
+.dshh-deck-refresh:active{background:color-mix(in srgb,var(--dsw-alias-label-primary,#e9eaee) 14%,transparent)}
+.dshh-deck-refresh-glyph{display:inline-block}
+.dshh-deck-refresh-busy .dshh-deck-refresh-glyph{animation:dshh-spin .8s linear infinite}
+@keyframes dshh-spin{to{transform:rotate(360deg)}}
+.dshh-card{display:flex;align-items:center;gap:10px;min-width:0;min-height:60px;padding:10px 13px;border-radius:12px;
+  box-sizing:border-box;text-align:left;text-decoration:none;cursor:pointer;font:inherit;
+  background:color-mix(in srgb,var(--dsw-alias-bg-layer-1,#15181d) 76%,transparent);
+  border:1px solid color-mix(in srgb,var(--dsw-alias-border-l1,#23262c) 90%,transparent);
+  transition:background .16s,border-color .16s,transform .16s,box-shadow .16s}
+.dshh-card:hover{background:color-mix(in srgb,var(--dsw-alias-bg-layer-2,#1b1e24) 90%,transparent);
+  border-color:var(--dsw-alias-border-l3,#3d434e);transform:translateY(-1px);
+  box-shadow:0 6px 18px rgba(0,0,0,.18)}
+.dshh-card:active{transform:translateY(0)}
+.dshh-avatar{flex:none;width:28px;height:28px;border-radius:9px;display:grid;place-items:center;
+  font-size:11.5px;font-weight:700;color:#fff;letter-spacing:.2px;box-shadow:inset 0 1px 0 rgba(255,255,255,.18)}
+.dshh-folder{flex:none;width:28px;height:28px;border-radius:9px;display:grid;place-items:center;
+  color:var(--dsw-alias-label-secondary,#a8aeba);
+  background:color-mix(in srgb,var(--dsw-alias-bg-layer-3,#262a31) 62%,transparent);
+  border:1px solid color-mix(in srgb,var(--dsw-alias-border-l2,#2f333b) 70%,transparent);
+  transition:color .16s,border-color .16s}
+.dshh-card:hover .dshh-folder{color:var(--dsw-alias-brand-primary,#4d6bfe);
+  border-color:color-mix(in srgb,var(--dsw-alias-brand-primary,#4d6bfe) 55%,transparent)}
+.dshh-favicon{flex:none;width:20px;height:20px;border-radius:5px;object-fit:contain;margin:0 3px}
+.dshh-card-body{display:flex;flex-direction:column;gap:2px;min-width:0}
+.dshh-card-title{font-size:13px;font-weight:600;line-height:1.25;color:var(--dsw-alias-label-primary,#e9eaee);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dshh-card-meta{font-size:11px;line-height:1.2;color:var(--dsw-alias-label-tertiary,#767c88);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dshh-deck-links .dshh-card{min-height:56px}
+
+/* Usage widgets: same footprint family as a workspace card, three short lines. */
+.dshh-deck-widgets{grid-template-columns:repeat(3,minmax(0,1fr))}
+.dshh-deck-widgets[data-count="4"]{grid-template-columns:repeat(4,minmax(0,1fr))}
+.dshh-widget{display:flex;flex-direction:column;gap:1px;min-width:0;min-height:64px;padding:9px 12px;border-radius:12px;
+  box-sizing:border-box;text-align:left;font:inherit;cursor:pointer;
+  background:color-mix(in srgb,var(--dsw-alias-bg-layer-1,#15181d) 76%,transparent);
+  border:1px solid color-mix(in srgb,var(--dsw-alias-border-l1,#23262c) 90%,transparent);
+  transition:background .16s,border-color .16s,transform .16s,box-shadow .16s}
+.dshh-widget:hover{background:color-mix(in srgb,var(--dsw-alias-bg-layer-2,#1b1e24) 90%,transparent);
+  border-color:var(--dsw-alias-border-l3,#3d434e);transform:translateY(-1px);
+  box-shadow:0 6px 18px rgba(0,0,0,.18)}
+.dshh-widget:active{transform:translateY(0)}
+.dshh-widget-loading,.dshh-widget-busy{opacity:.72}
+.dshh-widget-top{display:flex;align-items:center;gap:6px;min-width:0}
+.dshh-widget-dot{flex:none;width:15px;height:15px;border-radius:5px;display:grid;place-items:center;
+  font-size:9px;font-weight:700;line-height:1;color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.18)}
+.dshh-widget-label{font-size:10.5px;letter-spacing:.2px;color:var(--dsw-alias-label-tertiary,#767c88);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dshh-widget-value{font-size:16px;font-weight:650;line-height:1.2;color:var(--dsw-alias-label-primary,#e9eaee);
+  font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dshh-widget-unit{margin-left:4px;font-size:10.5px;font-weight:500;font-style:normal;color:var(--dsw-alias-label-tertiary,#767c88)}
+.dshh-widget-detail{font-size:10.5px;line-height:1.25;color:var(--dsw-alias-label-tertiary,#767c88);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dshh-widget[data-tone="warn"] .dshh-widget-value{color:#e0a33a}
+.dshh-widget[data-tone="error"] .dshh-widget-value{color:#e0635b}
+.dshh-widget-edit{display:flex;align-items:center;gap:8px}
+.dshh-widget-edit select{flex:1;min-width:0}
+.dshh-widget-edit-index{flex:none;width:18px;height:18px;border-radius:6px;display:grid;place-items:center;
+  font-size:10px;color:var(--dsw-alias-label-tertiary,#8b919c);background:var(--dsw-alias-bg-layer-2,#1f232a)}
+
+.dshh-footer{display:flex;justify-content:center;order:1000;box-sizing:border-box;
+  width:min(var(--dshh-deck-width,var(--dsh-composer-card-max-width,760px)),100%);
+  margin:0 auto;padding:0}
+.dshh-gear{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 9px;border-radius:7px;cursor:pointer;
+  font:inherit;font-size:11.5px;color:var(--dsw-alias-label-tertiary,#767c88);
+  background:transparent;border:1px solid transparent;transition:color .15s,background .15s,border-color .15s}
+.dshh-gear:hover{color:var(--dsw-alias-label-secondary,#a8aeba);background:color-mix(in srgb,var(--dsw-alias-bg-layer-2,#1f232a) 70%,transparent);
+  border-color:color-mix(in srgb,var(--dsw-alias-border-l2,#2f333b) 80%,transparent)}
+
+.dshh-hero-logo{display:block;max-height:96px;max-width:min(420px,70vw);object-fit:contain;margin:0 auto}
+.dshh-sidebar-mark{width:22px;height:22px;object-fit:contain;display:block}
+.dshh-sidebar-name{font-size:13px;font-weight:600;letter-spacing:.2px;color:var(--dsw-alias-label-primary,#eef1f6);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.dshh-modal-backdrop{position:fixed;inset:0;z-index:2147483000;display:grid;place-items:center;background:rgba(6,8,12,.5);backdrop-filter:blur(3px)}
+.dshh-modal{width:min(560px,92vw);max-height:84vh;display:flex;flex-direction:column;border-radius:14px;overflow:hidden;
+  background:var(--dsw-alias-bg-base,#15181d);border:1px solid var(--dsw-alias-border-l2,#2c313a);box-shadow:0 24px 60px rgba(0,0,0,.45);
+  color:var(--dsw-alias-label-primary,#eef1f6);font-size:13px}
+.dshh-modal-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--dsw-alias-border-l1,#23272f)}
+.dshh-modal-body{padding:12px 16px 18px;overflow:auto;display:flex;flex-direction:column;gap:18px}
+.dshh-modal-foot{display:flex;justify-content:flex-end;gap:8px;padding:12px 16px;border-top:1px solid var(--dsw-alias-border-l1,#23272f)}
+.dshh-section{display:flex;flex-direction:column;gap:9px}
+.dshh-section h4{margin:0;font-size:12px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;color:var(--dsw-alias-label-tertiary,#8b919c)}
+.dshh-field{display:flex;flex-direction:column;gap:5px}
+.dshh-field-label{font-size:12px;color:var(--dsw-alias-label-secondary,#b9bfc9)}
+.dshh-toggle{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12.5px;color:var(--dsw-alias-label-secondary,#c3c9d4)}
+.dshh-row-inline{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.dshh-duo{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.dshh-btn{height:30px;padding:0 14px;border-radius:8px;cursor:pointer;font:inherit;font-size:12.5px;
+  background:var(--dsw-alias-bg-layer-2,#1f232a);color:var(--dsw-alias-label-primary,#e8eaee);border:1px solid var(--dsw-alias-border-l2,#333a45)}
+.dshh-btn:hover{border-color:var(--dsw-alias-border-l3,#4a5160)}
+.dshh-btn:disabled{opacity:.5;cursor:default}
+.dshh-btn-primary{background:var(--dsw-alias-brand-primary,#4f7cff);color:#fff;border-color:transparent}
+.dshh-icon-btn{width:26px;height:26px;border-radius:8px;cursor:pointer;background:transparent;border:none;color:var(--dsw-alias-label-tertiary,#8b919c);font-size:13px}
+.dshh-icon-btn:hover{background:var(--dsw-alias-bg-layer-2,#22262e);color:var(--dsw-alias-label-primary,#eef)}
+.dshh-hint{margin:0;font-size:11.5px;color:var(--dsw-alias-label-tertiary,#8b919c)}
+.dshh-note{margin:0;font-size:12px;color:var(--dsw-alias-state-business-primary,#7aa2ff)}
+input[type="range"]{width:100%;accent-color:var(--dsw-alias-brand-primary,#4f7cff)}
+input[type="color"].dshh-color{width:72px!important;flex:none;cursor:pointer}
+@media (max-width:720px){.dshh-deck,.dshh-deck-widgets,.dshh-deck-widgets[data-count="4"]{grid-template-columns:repeat(2,minmax(0,1fr))}}
+</style>
+</head>
+<body>
+<div class="frame">
+  <aside class="sidebar">
+    <div class="sidebar-brand"><span class="dshh-sidebar-mark"></span><span class="dshh-sidebar-name">DeepSeek Harness</span></div>
+    <div class="side-item active">＋ 新会话</div>
+    <div class="side-item">acme-web</div>
+    <div class="side-item">data-lab</div>
+    <div class="side-item">notes-app</div>
+  </aside>
+  <main class="main">
+    <div class="stage">
+      <div class="hero-brand"><img class="dshh-hero-logo" alt=""></div>
+      <div class="headline">探索未至之境</div>
+      <div class="composer-stack">
+        
+  <div class="dshh-deck" data-dshh="workspaces">
+    <span class="dshh-deck-head"><span class="dshh-deck-head-text">最近工作区</span></span>
+      <button type="button" class="dshh-card" title="acme-web">
+        <span class="dshh-avatar" style="background:linear-gradient(135deg,hsl(150 56% 48%),hsl(192 54% 38%))">A</span>
+        <span class="dshh-card-body">
+          <span class="dshh-card-title">acme-web</span>
+          <span class="dshh-card-meta">2 个会话 · 2 小时前</span>
+        </span>
+      </button>
+      <button type="button" class="dshh-card" title="data-lab">
+        <span class="dshh-avatar" style="background:linear-gradient(135deg,hsl(196 56% 48%),hsl(238 54% 38%))">D</span>
+        <span class="dshh-card-body">
+          <span class="dshh-card-title">data-lab</span>
+          <span class="dshh-card-meta">14 个会话 · 4 小时前</span>
+        </span>
+      </button>
+      <button type="button" class="dshh-card" title="notes-app">
+        <span class="dshh-avatar" style="background:linear-gradient(135deg,hsl(22 56% 48%),hsl(64 54% 38%))">N</span>
+        <span class="dshh-card-body">
+          <span class="dshh-card-title">notes-app</span>
+          <span class="dshh-card-meta">29 个会话 · 昨天</span>
+        </span>
+      </button>
+      <button type="button" class="dshh-card" title="video-pipeline">
+        <span class="dshh-avatar" style="background:linear-gradient(135deg,hsl(176 56% 48%),hsl(218 54% 38%))">V</span>
+        <span class="dshh-card-body">
+          <span class="dshh-card-title">video-pipeline</span>
+          <span class="dshh-card-meta">78 个会话 · 3 天前</span>
+        </span>
+      </button>
+      <button type="button" class="dshh-card" title="content-ops">
+        <span class="dshh-avatar" style="background:linear-gradient(135deg,hsl(1 56% 48%),hsl(43 54% 38%))">C</span>
+        <span class="dshh-card-body">
+          <span class="dshh-card-title">content-ops</span>
+          <span class="dshh-card-meta">46 个会话 · 6 天前</span>
+        </span>
+      </button>
+      <button type="button" class="dshh-card" title="acme-web-plugin">
+        <span class="dshh-avatar" style="background:linear-gradient(135deg,hsl(242 56% 48%),hsl(284 54% 38%))">A</span>
+        <span class="dshh-card-body">
+          <span class="dshh-card-title">acme-web-plugin</span>
+          <span class="dshh-card-meta">16 个会话 · 9 天前</span>
+        </span>
+      </button>
+  </div>
+  <div class="dshh-deck dshh-deck-widgets" data-dshh="widgets" data-count="3">
+    <span class="dshh-deck-head"><span class="dshh-deck-head-text">自定义组件</span><button type="button" class="dshh-deck-refresh" title="刷新组件数据" aria-label="刷新组件数据"><span class="dshh-deck-refresh-glyph">↻</span></button></span>
+      <button type="button" class="dshh-widget" data-tone="ok" title="DeepSeek · 余额&#10;充值 ¥12.34 · 赠送 ¥0.00&#10;点击刷新">
+        <span class="dshh-widget-top"><span class="dshh-widget-dot" style="background:#4d6bfe">D</span><span class="dshh-widget-label">DeepSeek</span></span>
+        <span class="dshh-widget-value">¥12.34<em class="dshh-widget-unit">余额</em></span>
+        <span class="dshh-widget-detail">充值 ¥12.34 · 赠送 ¥0.00</span>
+      </button>
+      <button type="button" class="dshh-widget" data-tone="ok" title="MiniMax · 本周不限&#10;5 小时窗剩 23% · 2 小时 14 分后重置&#10;本周不限 · 5 小时窗 4 天 11 小时后周重置&#10;点击刷新">
+        <span class="dshh-widget-top"><span class="dshh-widget-dot" style="background:#ff7043">M</span><span class="dshh-widget-label">MiniMax</span></span>
+        <span class="dshh-widget-value">∞<em class="dshh-widget-unit">本周不限</em></span>
+        <span class="dshh-widget-detail">5 小时窗剩 23% · 2 小时 14 分后重置</span>
+      </button>
+      <button type="button" class="dshh-widget" data-tone="warn" title="Cline Pass · 本月已用&#10;5 小时 22% · 35 分后重置；本周 9% · 6 天 19 小时后重置；本月 35% · 17 天后重置&#10;40.0M tokens（本机 96 个会话 · 7 天内 12 个活跃）&#10;点击刷新">
+        <span class="dshh-widget-top"><span class="dshh-widget-dot" style="background:#7c5cff">C</span><span class="dshh-widget-label">Cline Pass</span></span>
+        <span class="dshh-widget-value">35%<em class="dshh-widget-unit">本月已用</em></span>
+        <span class="dshh-widget-detail">5 小时 22% · 本周 9%</span>
+      </button>
+  </div>
+        <div class="composer-card">
+          <div class="composer-input">给 DeepSeek 发消息…</div>
+          <div class="composer-actions"><span class="pill">DeepSeek V4</span><span class="pill">发送</span></div>
+        </div>
+        
+  <div class="dshh-deck dshh-deck-links dshh-below" data-dshh="links">
+    <span class="dshh-deck-head"><span class="dshh-deck-head-text">常用站点</span></span>
+      <a class="dshh-card" href="#" onclick="return false">
+        <span class="dshh-avatar" style="background:#24292f">G</span>
+        <span class="dshh-card-body">
+          <span class="dshh-card-title">GitHub</span>
+          <span class="dshh-card-meta">github.com</span>
+        </span>
+      </a>
+      <a class="dshh-card" href="#" onclick="return false">
+        <span class="dshh-avatar" style="background:#333a45">M</span>
+        <span class="dshh-card-body">
+          <span class="dshh-card-title">MDN</span>
+          <span class="dshh-card-meta">developer.mozilla.org</span>
+        </span>
+      </a>
+      <a class="dshh-card" href="#" onclick="return false">
+        <span class="dshh-avatar" style="background:#f48024">S</span>
+        <span class="dshh-card-body">
+          <span class="dshh-card-title">Stack Overflow</span>
+          <span class="dshh-card-meta">stackoverflow.com</span>
+        </span>
+      </a>
+      <a class="dshh-card" href="#" onclick="return false">
+        <span class="dshh-avatar" style="background:#a259ff">F</span>
+        <span class="dshh-card-body">
+          <span class="dshh-card-title">Figma</span>
+          <span class="dshh-card-meta">figma.com</span>
+        </span>
+      </a>
+      <a class="dshh-card" href="#" onclick="return false">
+        <span class="dshh-avatar" style="background:#ff0000">Y</span>
+        <span class="dshh-card-body">
+          <span class="dshh-card-title">YouTube</span>
+          <span class="dshh-card-meta">youtube.com</span>
+        </span>
+      </a>
+      <a class="dshh-card" href="#" onclick="return false">
+        <span class="dshh-avatar" style="background:#ff6600">H</span>
+        <span class="dshh-card-body">
+          <span class="dshh-card-title">Hacker News</span>
+          <span class="dshh-card-meta">news.ycombinator.com</span>
+        </span>
+      </a>
+  </div>
+        
+  <div class="dshh-footer">
+    <button type="button" class="dshh-gear"><span>⚙</span><span>自定义主页</span></button>
+  </div>
+      </div>
+    </div>
+  </main>
+</div>
+<script>
+  const params = new URLSearchParams(location.search)
+  const root = document.documentElement
+  if (params.get('bg') === '1') {
+    const layer = document.createElement('div')
+    layer.id = 'dshh-bg'
+    layer.style.backgroundImage = 'linear-gradient(140deg,#1b2a4a 0%,#3a1f4d 45%,#5b2a2a 100%)'
+    layer.style.setProperty('--dshh-dim', '0.28')
+    document.body.prepend(layer)
+    root.setAttribute('data-dshh-bg', '1')
+  }
+  if (params.get('modal') === '1') document.body.insertAdjacentHTML('beforeend', "\n<div class=\"dshh-modal-backdrop\">\n  <div class=\"dshh-modal\">\n    <header class=\"dshh-modal-head\"><strong>自定义主页</strong><button class=\"dshh-icon-btn\">✕</button></header>\n    <div class=\"dshh-modal-body\">\n      <section class=\"dshh-section\">\n        <h4>配色</h4>\n        <label class=\"dshh-field\"><span class=\"dshh-field-label\">模式</span>\n          <select style=\"width:100%;box-sizing:border-box;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:7px 10px;font-size:13px;font:inherit\">\n            <option>使用下面的自定义配色</option></select></label>\n        <label class=\"dshh-field\"><span class=\"dshh-field-label\">强调色</span>\n          <input type=\"color\" class=\"dshh-color\" value=\"#4d6bfe\" style=\"height:34px;padding:2px;background:var(--dsw-alias-bg-layer-2);border:1px solid var(--dsw-alias-border-l2);border-radius:8px\"></label>\n      </section>\n      <section class=\"dshh-section\">\n        <h4>背景图</h4>\n        <label class=\"dshh-toggle\"><input type=\"checkbox\" checked><span>启用背景图</span></label>\n        <div class=\"dshh-row-inline\"><button class=\"dshh-btn\">选择图片…</button><button class=\"dshh-btn\">移除</button></div>\n        <label class=\"dshh-field\"><span class=\"dshh-field-label\">不透明度 1</span><input type=\"range\" min=\"0\" max=\"1\" value=\"1\"></label>\n        <label class=\"dshh-field\"><span class=\"dshh-field-label\">模糊 12px</span><input type=\"range\" min=\"0\" max=\"40\" value=\"12\"></label>\n      </section>\n      <section class=\"dshh-section\">\n        <h4>工作区卡片</h4>\n        <label class=\"dshh-toggle\"><input type=\"checkbox\" checked><span>只在首页（新会话）显示</span></label>\n        <label class=\"dshh-field\"><span class=\"dshh-field-label\">显示数量：6</span><input type=\"range\" min=\"3\" max=\"8\" value=\"6\"></label>\n      </section>\n      <section class=\"dshh-section\">\n        <h4>常用入口</h4>\n        <div class=\"dshh-row-inline\"><button class=\"dshh-btn\">立即重新抓取</button><span class=\"dshh-hint\">6 个站点 · chrome:Default</span></div>\n      </section>\n      <section class=\"dshh-section\">\n        <h4>组件</h4>\n        <label class=\"dshh-toggle\"><input type=\"checkbox\" checked><span>在输入框上方显示组件行</span></label>\n        <p class=\"dshh-hint\">最多 4 个，一行排列，每个约等于一张工作区卡片。目前提供 API 用量组件（DeepSeek / MiniMax / Cline Pass），后续可加更多类型。</p>\n        <div class=\"dshh-widget-edit\"><span class=\"dshh-widget-edit-index\">1</span><select style=\"flex:1;min-width:0;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:7px 10px;font-size:13px\"><option>DeepSeek · 账户余额</option></select><button class=\"dshh-icon-btn\">✕</button></div>\n        <div class=\"dshh-widget-edit\"><span class=\"dshh-widget-edit-index\">2</span><select style=\"flex:1;min-width:0;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;padding:7px 10px;font-size:13px\"><option>MiniMax · 用量 / 配额</option></select><button class=\"dshh-icon-btn\">✕</button></div>\n        <div class=\"dshh-row-inline\"><button class=\"dshh-btn\">＋ 添加组件</button><button class=\"dshh-btn\">刷新数据</button></div>\n        <label class=\"dshh-field\"><span class=\"dshh-field-label\">自动刷新：5 分钟</span><input type=\"range\" min=\"1\" max=\"60\" value=\"5\"></label>\n      </section>\n      <p class=\"dshh-note\">已保存</p>\n    </div>\n    <footer class=\"dshh-modal-foot\"><button class=\"dshh-btn\">关闭</button><button class=\"dshh-btn dshh-btn-primary\">保存</button></footer>\n  </div>\n</div>")
+</script>
+</body>
+</html>
