@@ -1,0 +1,168 @@
+/* ────────────────────────────────────────────────────────────────────────────
+   composer widget — DSH 输入框 demo
+   工作区选择 + 模式选择同排，宽度由画布网格/选中面板实时调整。
+   ──────────────────────────────────────────────────────────────────────────── */
+
+.w-composer { overflow: visible; }
+
+.cmp-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  padding: 11px 13px 9px;
+  border: 1px solid var(--bd-2);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--bg-1) 94%, transparent);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, .14), var(--shadow-card);
+  overflow: visible;
+  transition: border-color .16s, box-shadow .16s, background .16s;
+}
+.cmp-card:focus-within {
+  border-color: color-mix(in srgb, var(--brand) 58%, transparent);
+  box-shadow: 0 0 0 3px var(--brand-soft), 0 12px 34px rgba(0, 0, 0, .16);
+}
+html[data-theme="light"] .cmp-card { background: rgba(255, 255, 255, .94); box-shadow: 0 10px 30px rgba(24, 34, 60, .08), var(--shadow-card); }
+html[data-theme="light"] .cmp-card:focus-within { box-shadow: 0 0 0 3px var(--brand-soft), 0 10px 30px rgba(24, 34, 60, .10); }
+
+.cmp-input {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  padding: 2px 2px 0;
+  border: 0;
+  outline: 0;
+  resize: none;
+  background: transparent;
+  color: var(--tx-1);
+  font-size: 13px;
+  line-height: 1.5;
+  font-family: var(--font);
+}
+.cmp-input::placeholder { color: var(--tx-3); }
+
+.cmp-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding-top: 6px;
+}
+.cmp-selects { display: flex; align-items: center; gap: 5px; min-width: 0; flex: 1; }
+
+.cmp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  max-width: 168px;
+  height: 25px;
+  padding: 0 8px;
+  border: 1px solid var(--bd-1);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--tx-2);
+  font-size: 11px;
+  white-space: nowrap;
+  transition: background .13s, border-color .13s, color .13s;
+}
+.cmp-chip:hover, .cmp-chip[aria-expanded="true"] {
+  border-color: var(--bd-3);
+  background: var(--surface-3);
+  color: var(--tx-1);
+}
+.cmp-chip .icon { width: 12px; height: 12px; color: var(--tx-3); }
+.cmp-chip .cmp-chev { width: 11px; height: 11px; opacity: .65; }
+.cmp-chip .cmp-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.cmp-spark {
+  width: 14px; height: 14px; flex: none;
+  display: grid; place-items: center;
+  border-radius: 4px;
+  background: var(--brand-soft);
+  color: var(--brand-2);
+  font-size: 9px;
+  line-height: 1;
+}
+
+.cmp-actions { display: flex; align-items: center; gap: 5px; flex: none; margin-left: auto; }
+.cmp-attach {
+  width: 26px; height: 26px;
+  display: grid; place-items: center;
+  border-radius: 8px;
+  color: var(--tx-3);
+  transition: background .13s, color .13s;
+}
+.cmp-attach:hover { background: var(--surface-2); color: var(--tx-1); }
+.cmp-attach .icon { width: 14px; height: 14px; }
+.cmp-send {
+  width: 28px; height: 28px;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  background: var(--brand);
+  color: #fff;
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--brand) 36%, transparent);
+  transition: background .13s, transform .13s, box-shadow .13s;
+}
+.cmp-send .icon { width: 15px; height: 15px; }
+.cmp-send:hover { background: color-mix(in srgb, var(--brand) 88%, #fff); transform: translateY(-1px); }
+.cmp-send:active { transform: translateY(0); }
+
+/* dropdowns */
+.cmp-menu {
+  position: absolute;
+  left: 8px;
+  bottom: calc(100% + 8px);
+  z-index: 30;
+  min-width: 232px;
+  padding: 5px;
+  border: 1px solid var(--bd-2);
+  border-radius: 11px;
+  background: var(--bg-1);
+  box-shadow: var(--shadow-lg);
+}
+.cmp-menu[hidden] { display: none; }
+.cmp-menu[data-menu-panel="mode"] { min-width: 216px; }
+.cmp-menu-label {
+  padding: 6px 8px 3px;
+  font-size: 9.5px; font-weight: 600;
+  letter-spacing: .55px; text-transform: uppercase;
+  color: var(--tx-3);
+}
+.cmp-opt {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; padding: 6px 8px;
+  border-radius: 6px;
+  color: var(--tx-2);
+  text-align: left;
+  transition: background .12s, color .12s;
+}
+.cmp-opt:hover { background: var(--surface-2); color: var(--tx-1); }
+.cmp-opt > .icon { width: 14px; height: 14px; color: var(--tx-3); }
+.cmp-opt-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.cmp-opt-name { font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cmp-opt-desc { font-size: 9.5px; color: var(--tx-3); }
+.cmp-opt-check { width: 13px; height: 13px; flex: none; color: var(--brand); opacity: 0; }
+.cmp-opt.is-selected .cmp-opt-check { opacity: 1; }
+.cmp-opt.is-selected .cmp-opt-name { color: var(--tx-1); font-weight: 600; }
+.cmp-menu-sep { height: 1px; margin: 4px 6px; background: var(--bd-1); }
+
+/* narrow / shallow composer */
+@container widget (max-width: 360px) {
+  .cmp-chip { max-width: 128px; padding: 0 7px; }
+  .cmp-attach { display: none; }
+}
+@container widget (max-width: 290px) {
+  .cmp-card { padding: 8px 10px 7px; border-radius: 14px; }
+  .cmp-input { font-size: 12.5px; }
+  .cmp-chip { height: 23px; font-size: 10.5px; max-width: 112px; }
+  .cmp-send { width: 26px; height: 26px; }
+  .cmp-menu { min-width: 210px; }
+}
+@container widget (max-height: 108px) {
+  .cmp-card { padding: 8px 11px 7px; border-radius: 14px; }
+  .cmp-input { font-size: 12.5px; line-height: 1.35; }
+  .cmp-bar { padding-top: 4px; }
+  .cmp-chip { height: 23px; }
+  .cmp-send { width: 26px; height: 26px; }
+}

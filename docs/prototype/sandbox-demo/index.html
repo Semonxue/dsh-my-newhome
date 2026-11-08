@@ -1,0 +1,608 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>DSH 沙箱组件 · 最小标准封装 PoC</title>
+<link rel="icon" href="data:,">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!--
+  沙箱 demo · 宿主页面
+  ---------------------------------------------------------------------------
+  两个内联资源是刻意放在这里的：
+  1. #widget-css        —— 主题 token + 公共组件类，宿主和 iframe 共用同一份
+                            （宿主读 textContent 注入 srcdoc，避免两套 token 漂移）
+  2. #iframe-bootstrap  —— 注入每个 srcdoc iframe 的沙箱运行时代码（type=text/plain，
+                            宿主不执行它，只把文本拼进 srcdoc）
+  真正的加载器 / 桥协议 / 探针展示在 host.js 里。
+-->
+<style id="widget-css">
+/* ── 主题 token（与 docs/prototype/styles/base.css 对齐） ─────────────────── */
+:root {
+  --font: "SF Pro Text", -apple-system, BlinkMacSystemFont, "PingFang SC",
+          "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", sans-serif;
+  --mono: "SF Mono", ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
+
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-xl: 22px;
+
+  --dur: .18s;
+  --ease: cubic-bezier(.22, .61, .36, 1);
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --bg-base: #131417;
+  --bg-shell: #0e0f12;
+  --bg-1: #191b20;
+  --bg-2: #1f2228;
+  --bg-3: #262a31;
+
+  --surface: rgba(25, 27, 32, .82);
+  --surface-2: rgba(31, 34, 40, .92);
+  --surface-3: #262a31;
+
+  --tx-1: #e9eaee;
+  --tx-2: #a8aeba;
+  --tx-3: #767c88;
+
+  --bd-1: #24272e;
+  --bd-2: #2f333b;
+  --bd-3: #3d434e;
+
+  --brand: #4d6bfe;
+  --brand-2: #7aa2ff;
+  --brand-soft: rgba(77, 107, 254, .16);
+
+  --green: #4ade80;
+  --amber: #e0a33a;
+  --red: #e0635b;
+  --violet: #a78bfa;
+  --cyan: #22d3ee;
+  --pink: #f472b6;
+
+  --grid-line: rgba(255, 255, 255, .05);
+  --shadow-card: 0 1px 0 rgba(255, 255, 255, .03) inset;
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, .18);
+  --shadow-lg: 0 18px 50px rgba(0, 0, 0, .42);
+}
+
+html[data-theme="light"] {
+  color-scheme: light;
+  --bg-base: #f6f7fa;
+  --bg-shell: #eef0f5;
+  --bg-1: #ffffff;
+  --bg-2: #f2f4f8;
+  --bg-3: #e8ebf1;
+
+  --surface: rgba(255, 255, 255, .9);
+  --surface-2: rgba(244, 246, 250, .95);
+  --surface-3: #e9ecf2;
+
+  --tx-1: #181b21;
+  --tx-2: #5a6170;
+  --tx-3: #8a909c;
+
+  --bd-1: #e7e9ef;
+  --bd-2: #d9dce4;
+  --bd-3: #c9cdd7;
+
+  --brand: #4d6bfe;
+  --brand-2: #3557f0;
+  --brand-soft: rgba(77, 107, 254, .10);
+
+  --green: #16a34a;
+  --amber: #b7791f;
+  --red: #c2413a;
+  --violet: #7c5cf0;
+  --cyan: #0891b2;
+  --pink: #db2777;
+
+  --grid-line: rgba(18, 24, 40, .06);
+  --shadow-card: 0 1px 2px rgba(18, 24, 40, .05), 0 1px 0 rgba(255, 255, 255, .8) inset;
+  --shadow-sm: 0 2px 8px rgba(18, 24, 40, .08);
+  --shadow-lg: 0 18px 50px rgba(18, 24, 40, .16);
+}
+
+html, body { margin: 0; padding: 0; }
+* { box-sizing: border-box; }
+
+/* ── 公共组件类（组件作者可直接用；CONTRACT.md 第 2 节同名同义） ──────────── */
+.w {
+  position: relative;
+  width: 100%; height: 100%;
+  display: flex; flex-direction: column;
+  min-width: 0; min-height: 0;
+  border-radius: inherit;
+  overflow: hidden;
+  color: var(--tx-1);
+  font-family: var(--font);
+  font-size: 12px;
+  line-height: 1.35;
+}
+.w-card {
+  padding: 12px 14px;
+  border: 1px solid var(--bd-1);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+.w-card-flush {
+  padding: 0;
+  border: 1px solid var(--bd-1);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+.w-bare { background: transparent; border: 0; overflow: visible; }
+
+.w-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.w-head-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.w-title { font-size: 12.5px; font-weight: 600; color: var(--tx-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.w-meta { font-size: 10.5px; color: var(--tx-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.w-spacer { flex: 1; }
+.w-mark {
+  flex: none;
+  width: 28px; height: 28px;
+  display: grid; place-items: center;
+  border-radius: 9px;
+  color: #fff;
+  font-size: 11px; font-weight: 700;
+  letter-spacing: .2px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18);
+}
+.w-chip {
+  flex: none;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  font-size: 10px; font-weight: 600; color: var(--tx-3);
+  font-variant-numeric: tabular-nums;
+}
+.w-body { min-height: 0; }
+.w-foot { margin-top: auto; }
+.w-divider { height: 1px; background: var(--bd-1); }
+.w-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  height: 28px; padding: 0 10px;
+  border-radius: 7px;
+  border: 1px solid var(--bd-2);
+  background: var(--surface-2);
+  color: var(--tx-2);
+  font-size: 11.5px; font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  font-family: inherit;
+}
+.w-btn:hover { border-color: var(--bd-3); color: var(--tx-1); }
+.w-btn-primary { border-color: transparent; background: var(--brand); color: #fff; }
+.w-btn-primary:hover { background: color-mix(in srgb, var(--brand) 88%, #fff); color: #fff; }
+.w-icon-btn {
+  width: 24px; height: 24px;
+  display: grid; place-items: center;
+  border-radius: 6px;
+  border: 0; background: transparent;
+  color: var(--tx-3);
+  cursor: pointer;
+  font-family: inherit;
+}
+.w-icon-btn:hover { background: var(--surface-2); color: var(--tx-1); }
+.w-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  height: 24px; padding: 0 9px;
+  border-radius: 999px;
+  border: 1px solid var(--bd-1);
+  background: var(--surface-2);
+  font-size: 11px; color: var(--tx-2);
+}
+.w-progress { height: 4px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
+.w-progress > i { display: block; height: 100%; border-radius: inherit; background: var(--brand); }
+.w-num { font-variant-numeric: tabular-nums; }
+
+/* iframe 内 bootstrap 用它渲染启动/运行时错误卡片 */
+.dsh-err {
+  box-sizing: border-box;
+  width: 100%; height: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--red);
+  border-radius: var(--r-lg);
+  background: color-mix(in srgb, var(--red) 10%, var(--surface));
+  color: var(--tx-1);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  line-height: 1.5;
+  overflow: hidden;
+}
+.dsh-err-h { font-family: var(--font); font-weight: 600; font-size: 11.5px; color: var(--red); margin-bottom: 4px; }
+.dsh-err-b { word-break: break-word; }
+</style>
+<link rel="stylesheet" href="sandbox.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-left">
+    <span class="topbar-logo" aria-hidden="true">◇</span>
+    <div class="topbar-titles">
+      <h1>DSH 沙箱组件 · PoC</h1>
+      <p>一个标准封装的 <code>.js</code> = 一个主页组件，但拿不到宿主数据</p>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <span class="status-pill" id="status-pill"><i class="dot"></i><span id="status-text">初始化…</span></span>
+    <span class="ver">v0 · 静态原型</span>
+  </div>
+</header>
+
+<main class="workspace">
+  <section class="canvas" aria-label="主页画布">
+    <div class="canvas-head">
+      <h2>主页画布</h2>
+      <span class="canvas-sub">3 个沙箱实例 · 每个实例一个 <code>sandbox="allow-scripts"</code> iframe</span>
+      <span class="canvas-spacer"></span>
+      <span class="canvas-chip" id="canvas-chip">24 栏 · 本 PoC 用固定像素</span>
+    </div>
+    <div class="canvas-grid" id="canvas-grid"></div>
+    <p class="canvas-foot">拖拽 / 缩放手势不在本 PoC 范围：这里只验证「组件包加载进沙箱 + 数据桥 + 安全边界」。</p>
+  </section>
+
+  <aside class="rail" aria-label="组件库与设置">
+    <section class="panel">
+      <div class="panel-head">
+        <h2>组件库</h2>
+        <span class="panel-hint">3 个示例包</span>
+      </div>
+      <div class="library" id="library"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>导入组件</h2>
+        <span class="panel-hint">v0 单文件</span>
+      </div>
+      <div class="import" id="import">
+        <label class="file-row" for="file-input">
+          <span class="file-btn">从文件导入 .js</span>
+          <span class="file-name" id="file-name">未选择文件</span>
+        </label>
+        <input type="file" id="file-input" accept=".js,text/javascript" hidden>
+        <div class="url-row">
+          <input type="url" id="url-input" placeholder="粘贴组件 URL（同源或允许 CORS）" spellcheck="false">
+          <button type="button" class="btn" id="url-btn">导入</button>
+        </div>
+        <p class="import-note" id="import-note">导入后立即在画布里创建新沙箱实例；文件内容只会进 iframe，不会在宿主执行。</p>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>外观与授权</h2>
+      </div>
+      <div class="appearance">
+        <div class="seg" id="theme-seg" role="group" aria-label="主题">
+          <button type="button" data-theme-value="dark" class="seg-btn is-on">深色</button>
+          <button type="button" data-theme-value="light" class="seg-btn">浅色</button>
+        </div>
+        <button type="button" class="btn btn-ghost" id="reset-perms">重置授权记忆</button>
+      </div>
+      <p class="appearance-note">组件主题靠 CSS 变量跟随：宿主只发 <code>theme</code> 事件，不让组件读宿主样式。</p>
+    </section>
+  </aside>
+</main>
+
+<section class="probe" aria-label="安全探针">
+  <div class="probe-head">
+    <h2>安全探针</h2>
+    <span class="probe-summary" id="probe-summary">等待实例启动…</span>
+    <span class="probe-spacer"></span>
+    <span class="probe-legend"><i class="lg ok"></i>被拦截 <i class="lg bad"></i>意外成功</span>
+  </div>
+  <div class="probe-grid" id="probe-grid"></div>
+</section>
+
+<!-- 权限 / 打开链接确认条由 host.js 注入到这里 -->
+<div class="prompt-host" id="prompt-host"></div>
+
+<!--
+  ════════════════════════════════════════════════════════════════════════════
+  iframe 沙箱运行时（bootstrap）
+  ----------------------------------------------------------------------------
+  · 宿主把这段文本 + 组件源码字符串拼进 srcdoc；不是 eval。
+  · 它提供 window.DSH_WIDGET = { define, request, notify, open, reportProbe }
+    与 postMessage 桥，并负责 render/mount 生命周期、事件分发、错误捕获。
+  · 这里不能出现 "script" 的结束标签字面量，否则 index.html 的解析会提前结束。
+  ════════════════════════════════════════════════════════════════════════════
+-->
+<script type="text/plain" id="iframe-bootstrap">
+(function () {
+  'use strict';
+
+  var root = document.getElementById('dsh-root');
+  var widgets = [];
+  var readySent = false;
+  var destroyed = false;
+  var cleanup = null;
+  var requestSeq = 0;
+  var pending = Object.create(null);
+  var listeners = { data: [], theme: [], resize: [] };
+
+  function post(msg) {
+    try { parent.postMessage(msg, '*'); } catch (err) { /* 宿主已关闭 */ }
+  }
+
+  function describeError(err) {
+    if (!err) return 'unknown';
+    if (typeof err === 'string') return err;
+    return (err.name || 'Error') + (err.message ? ': ' + err.message : '');
+  }
+
+  function emit(event, payload) {
+    var arr = listeners[event] || [];
+    for (var i = 0; i < arr.length; i++) {
+      try { arr[i](payload); }
+      catch (err) { post({ t: 'error', message: '事件 ' + event + ' 回调抛错：' + describeError(err) }); }
+    }
+  }
+
+  /* ctx 是同一个可变对象：theme / size / data / now 在事件里原地更新，
+     组件 mount 时拿到的引用始终是最新的。 */
+  var ctx = {
+    theme: document.documentElement.getAttribute('data-theme') || 'dark',
+    size: { w: window.innerWidth, h: window.innerHeight, cols: 8, rows: 5 },
+    locale: 'zh-CN',
+    instanceId: 'unknown',
+    now: new Date(),
+    data: Object.create(null),
+    on: function (event, cb) {
+      if (typeof event !== 'string' || typeof cb !== 'function') return function () {};
+      if (!listeners[event]) listeners[event] = [];
+      listeners[event].push(cb);
+      return function () {
+        var i = listeners[event].indexOf(cb);
+        if (i >= 0) listeners[event].splice(i, 1);
+      };
+    }
+  };
+
+  function failCard(title, err) {
+    var text = title + ' · ' + describeError(err);
+    root.innerHTML = '<div class="dsh-err"><div class="dsh-err-h">组件运行时错误</div><div class="dsh-err-b"></div></div>';
+    var body = root.querySelector('.dsh-err-b');
+    if (body) body.textContent = text;
+    post({ t: 'error', message: text });
+  }
+
+  function sendReady() {
+    if (readySent) return;
+    readySent = true;
+    if (!widgets.length) {
+      post({
+        t: 'ready',
+        widget: null,
+        error: { code: 'E_NO_DEFINE', message: '组件文件未调用 DSH_WIDGET.define(...)' }
+      });
+      return;
+    }
+    var m = widgets[0];
+    post({
+      t: 'ready',
+      widget: {
+        id: m.id,
+        name: m.name || m.id,
+        version: m.version || '0.0.0',
+        author: m.author || '',
+        description: m.description || '',
+        permissions: (m.permissions || []).slice(),
+        grid: m.grid || {}
+      }
+    });
+  }
+
+  function validateManifest(m) {
+    if (!m || typeof m !== 'object') throw new Error('define 的参数必须是对象');
+    if (typeof m.id !== 'string' || !/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/.test(m.id)) {
+      throw new Error('id 必须是 kebab-case（小写字母/数字/连字符）');
+    }
+    if (typeof m.render !== 'function') throw new Error('缺少 render(ctx) 函数');
+    if (m.mount != null && typeof m.mount !== 'function') throw new Error('mount 必须是函数');
+    if (m.permissions != null && !Array.isArray(m.permissions)) throw new Error('permissions 必须是数组');
+    if (m.grid != null && (typeof m.grid !== 'object' || Array.isArray(m.grid))) throw new Error('grid 必须是对象');
+  }
+
+  function renderWidget() {
+    if (destroyed) return;
+    var w = widgets[0];
+    if (!w) return;
+    var html;
+    try {
+      html = w.render(ctx);
+    } catch (err) {
+      failCard('render(ctx) 抛错', err);
+      return;
+    }
+    if (typeof html !== 'string') {
+      failCard('render(ctx) 必须返回 HTML 字符串', new Error('实际返回了 ' + typeof html));
+      return;
+    }
+    root.innerHTML = html;
+    if (typeof w.mount === 'function') {
+      try {
+        var ret = w.mount(root, ctx);
+        if (ret != null && typeof ret !== 'function') {
+          post({ t: 'error', message: 'mount(root, ctx) 的返回值不是 cleanup 函数，已忽略' });
+        } else {
+          cleanup = ret || null;
+        }
+      } catch (err) {
+        failCard('mount(root, ctx) 抛错', err);
+      }
+    }
+    postDiag();
+  }
+
+  function postDiag() {
+    var cs = window.getComputedStyle(document.documentElement);
+    var first = root.querySelector('.w');
+    var rect = first ? first.getBoundingClientRect() : null;
+    post({
+      t: 'diag',
+      info: {
+        htmlLen: root.innerHTML.length,
+        viewport: window.innerWidth + '×' + window.innerHeight,
+        rootH: Math.round(root.getBoundingClientRect().height),
+        firstClass: first ? String(first.className).slice(0, 60) : null,
+        firstW: rect ? Math.round(rect.width) : 0,
+        firstH: rect ? Math.round(rect.height) : 0,
+        theme: document.documentElement.getAttribute('data-theme'),
+        tokenTx1: cs.getPropertyValue('--tx-1').trim(),
+        tokenSurface: cs.getPropertyValue('--surface').trim()
+      }
+    });
+  }
+
+  function runCleanup() {
+    if (typeof cleanup !== 'function') return;
+    var fn = cleanup;
+    cleanup = null;
+    try { fn(); }
+    catch (err) { post({ t: 'error', message: 'cleanup 抛错：' + describeError(err) }); }
+  }
+
+  function respondFailure(id, code, message) {
+    post({ t: 'response', id: id, ok: false, error: { code: code, message: message } });
+  }
+
+  function onInit(payload) {
+    if (!payload) return;
+    if (payload.theme) {
+      ctx.theme = payload.theme;
+      document.documentElement.setAttribute('data-theme', payload.theme);
+    }
+    if (payload.size) ctx.size = payload.size;
+    if (payload.locale) ctx.locale = payload.locale;
+    if (payload.instanceId) ctx.instanceId = payload.instanceId;
+    if (payload.now) ctx.now = new Date(payload.now);
+    if (payload.data) ctx.data = payload.data;
+    renderWidget();
+  }
+
+  function onResponse(msg) {
+    var entry = pending[msg.id];
+    if (!entry) return;
+    delete pending[msg.id];
+    clearTimeout(entry.timer);
+    if (msg.ok) {
+      entry.resolve(msg.data);
+      return;
+    }
+    var err = new Error((msg.error && msg.error.message) || '宿主拒绝了请求');
+    err.code = (msg.error && msg.error.code) || 'E_UNKNOWN';
+    entry.reject(err);
+  }
+
+  function onEvent(name, payload) {
+    if (name === 'theme' && payload && payload.theme) {
+      ctx.theme = payload.theme;
+      document.documentElement.setAttribute('data-theme', payload.theme);
+    } else if (name === 'resize' && payload && payload.size) {
+      ctx.size = payload.size;
+    } else if (name === 'data' && payload) {
+      ctx.data[payload.resource] = payload.data;
+    }
+    emit(name, payload);
+  }
+
+  window.addEventListener('message', function (ev) {
+    if (ev.source !== parent) return;
+    var msg = ev.data;
+    if (!msg || typeof msg !== 'object') return;
+    if (msg.t === 'init') onInit(msg.ctx);
+    else if (msg.t === 'response') onResponse(msg);
+    else if (msg.t === 'event') onEvent(msg.event, msg.payload);
+    else if (msg.t === 'destroy') {
+      destroyed = true;
+      runCleanup();
+      post({ t: 'destroyed' });
+    }
+  });
+
+  window.addEventListener('error', function (ev) {
+    post({
+      t: 'error',
+      message: '未捕获异常：' + String(ev.message || '脚本错误'),
+      source: String(ev.filename || ''),
+      line: ev.lineno || 0
+    });
+  });
+
+  window.addEventListener('unhandledrejection', function (ev) {
+    post({ t: 'error', message: '未处理的 Promise 拒绝：' + describeError(ev.reason) });
+  });
+
+  var api = {
+    define: function (manifest) {
+      try {
+        validateManifest(manifest);
+      } catch (err) {
+        post({ t: 'error', message: 'define 校验失败：' + describeError(err) });
+        return;
+      }
+      if (widgets.length) {
+        post({ t: 'error', message: '一个组件文件只允许定义一个组件，已忽略：' + manifest.id });
+        return;
+      }
+      var m = manifest;
+      m.permissions = (m.permissions || []).slice();
+      m.grid = m.grid || {};
+      widgets.push(m);
+      sendReady();
+    },
+
+    /* 组件面向宿主的唯一主动通道：请求授权资源。
+       返回 Promise；宿主拒绝时 reject 的 Error 带 .code。 */
+    request: function (resource, params) {
+      return new Promise(function (resolve, reject) {
+        var id = 'r' + (++requestSeq);
+        var timer = setTimeout(function () {
+          if (!pending[id]) return;
+          delete pending[id];
+          reject(new Error('E_TIMEOUT: 宿主未响应请求 ' + id));
+        }, 8000);
+        pending[id] = { resolve: resolve, reject: reject, timer: timer };
+        post({ t: 'request', id: id, resource: String(resource), params: params || {} });
+      });
+    },
+
+    notify: function (level, text) {
+      post({ t: 'notify', level: String(level || 'info'), text: String(text == null ? '' : text) });
+    },
+
+    open: function (url) {
+      post({ t: 'open', url: String(url) });
+    },
+
+    /* 安全探针专用：把结构化结果回传宿主（v0 扩展，见 README 协议表）。 */
+    reportProbe: function (items) {
+      post({ t: 'probe', items: Array.isArray(items) ? items : [] });
+    }
+  };
+
+  try {
+    Object.defineProperty(window, 'DSH_WIDGET', {
+      value: api, writable: false, enumerable: true, configurable: false
+    });
+  } catch (err) {
+    window.DSH_WIDGET = api;
+  }
+
+  /* 组件源码在下一个 script 里执行；如果它没调 define（语法错误 / 忘了调），
+     兜底上报 E_NO_DEFINE，避免宿主永远等 ready。 */
+  setTimeout(sendReady, 80);
+  window.addEventListener('load', function () { setTimeout(sendReady, 0); });
+}());
+</script>
+
+<script src="host.js"></script>
+</body>
+</html>

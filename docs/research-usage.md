@@ -30,6 +30,8 @@ Reproduce helpers: `<scratch>/keys.py` (loader + `req()` + `redact()`),
 | minimax-cn | token-plan credit pool / console panel | `GET https://www.minimaxi.com/backend/account/token_plan_credit` | web-session **cookie** only | **401** `{"base_resp":{"status_code":1004,"status_msg":"not login"}}` | ❌ **local fallback only** |
 | **cline-pass** (`CLINE_PASS_API_KEY`) | subscription windows: **used %** for 5 h / weekly / monthly + reset instants | `GET https://api.cline.bot/api/v1/users/me/plan/usage-limits` | `Authorization: Bearer <key>` (plain key; a WorkOS OAuth JWT needs the `workos:` **prefix**) | 200 | ✅ **works** |
 | cline-pass | token / cost counts | — | — | `/users/me/usages` → 400 `Invalid request format`, `/users/me/plan/usage` → 404 | ❌ **local fallback only** |
+| **opencode-go** (`OPENCODE_GO_API_KEY`) | Go subscription windows: **used %** for 5 h / weekly / monthly + reset instants; `rate-limited` = exhausted | `GET https://opencode.ai/inference/go/v1/usage` | `Authorization: Bearer <key>` (**never** send `x-opencode-org-id` unless it is the real `wrk_…` id) | 200 | ✅ **works** (needs a Go subscription; 403 otherwise) |
+| opencode-go | plan name (Go / Go Plus / Go Teams), monthly $ allowance, Extra Usage balance | — | — | not in payload or headers; `/console/api/policies/current-budgets` → 403 for an API key | ❌ **docs table only** |
 | **tuzi** (`TUZI_API_KEY`) | nothing remote — no endpoint known | — | — | — | ❌ **local fallback only** |
 
 Host/dialect gate for the MiniMax key: it is a **CN** key. `api.minimaxi.com` and
@@ -44,6 +46,7 @@ Host/dialect gate for the MiniMax key: it is a **CN** key. `api.minimaxi.com` an
 | minimax-cn (coding plan) | ❌ (`total_count` is 0 for `general`) | via `100 - remaining_percent` | ❌ (percent only) | 5 h fixed window + weekly window, both with epoch ms bounds and reset countdown | ❌ |
 | minimax-cn (admin key only) | presumable, untested | — | — | — | — |
 | cline-pass | ❌ | ✅ `percentUsed` per 5 h / weekly / monthly window | ❌ (percent only; internal entitlements cap in USD) | 5 h + weekly + monthly rolling windows, `resetsAt` ISO instants | ✅ **local DSH logs only** |
+| opencode-go | ❌ | ✅ `percent` per 5 h / weekly / monthly window | ❌ (percent only; $ table is docs-only) | 5 h sliding + weekly (Mon 00:00Z) + monthly (anniversary), `resetsAt` ISO instants | ✅ **local DSH logs only** |
 | tuzi | ❌ | ❌ | ❌ | ❌ | ✅ **only from local DSH logs** |
 | any provider, per-day history | — | — | — | — | ✅ **only from local DSH logs** |
 
@@ -286,11 +289,68 @@ Measured behaviour:
 
 ---
 
+### 2.10 OpenCode Go subscription windows — `GET https://opencode.ai/inference/go/v1/usage`
+
+Not in the prose docs: the route is declared in the gateway OpenAPI
+([`https://opencode.ai/inference/openapi.json`](https://opencode.ai/inference/openapi.json),
+path `/go/v1/usage`, tag `goUsage`) and is the same handler the OpenCode server exposes
+locally as `GET /api/experimental/usage/limits` (`UsageLimits.Go` / `UsageLimits.Meter`).
+One API key is enough — no Console session and no local OpenCode process.
+
+```http
+GET /inference/go/v1/usage HTTP/1.1
+Host: opencode.ai
+Authorization: Bearer <OPENCODE_GO_API_KEY>
+```
+`200`, `content-type: application/json`, `cache-control: no-store`:
+
+```json
+{ "usage": {
+  "rolling": { "status": "ok", "percent": 0, "resetsAt": "2026-11-06T23:13:21.000Z" },
+  "weekly":  { "status": "ok", "percent": 0, "resetsAt": "2026-11-09T00:00:00.000Z" },
+  "monthly": { "status": "ok", "percent": 0, "resetsAt": "2026-12-06T17:46:15.000Z" } } }
+```
+
+Semantics, source-verified against `anomalyco/opencode` (`packages/schema/src/usage-limits.ts`,
+`packages/core/src/usage-limits.ts`, `packages/app/src/usage/dialog.tsx`,
+`packages/app/src/runtime/i18n/en.ts`):
+
+- `percent` is the share **used**, integer 0–100 (`Meter.percent` doc comment: *“How much of the
+  window's allowance is used.”*; the Console dialog renders `{{percent}}% used`). There is **no**
+  remaining field — a "left" widget must compute `100 − percent`. Whole-percent granularity, so
+  `0` also covers “< 1%”.
+- `status` enum is exactly `ok | rate-limited` (required, no other values); the local schema's
+  `limited` is `status === "rate-limited"`. There is no warning/exceeded/blocked state.
+- `rolling` is the **5-hour** window (sliding, anchored on the first request in the window);
+  `weekly` resets Monday `00:00:00Z`; `monthly` resets on the subscription anniversary. The docs'
+  allowance split is 5 h = 20% of the monthly limit, weekly = 50%, monthly = 100%, so the highest
+  percentage is the window that blocks a request first.
+- Plan identity (Go / Go Plus / Go Teams) and the dollar allowance are **not** returned; only a
+  paid inference response's `usage.opencode.billing_source` (`go` | `go-plus` | …) hints at the
+  plan, and the monthly $ table is docs-only.
+- `GET /zen/go/v1/usage` hits the same handler. `x-opencode-org-id` is optional, but **any value
+  other than the real workspace id fails the call with `400`** — never send it.
+- Failure modes: missing/bad key → `401 {"type":"error","error":{"type":"AuthError",…}}`;
+  workspace without a Go subscription → `403` (the OpenCode client treats 403 as “no allowance”,
+  so the card should say “no Go subscription”, not “error”); `HEAD`/`POST` → `404`; a trailing
+  slash hangs. Latency 1–7.6 s, so the read needs a ~15 s timeout.
+- Polling: no rate-limit headers at all, `cache-control: no-store` (no conditional GET). The
+  vendor's own client allows 15 s per read and re-polls console config once a minute, so the
+  plugin's 60 s TTL + 5 min default poll sits comfortably inside that.
+
 ## 3. Normalized widget payload contract (recommended)
 
 One flat object per widget slot, already formatted for display so the client stays dumb.
 Adapted from what `lib/index.js` builds today (`kind/primary/secondary/detail/tone`) — extended,
 not replaced, so the existing client code keeps working with optional fields.
+
+> **v0.3.1 — quota cards unified.** All three subscription cards (MiniMax / Cline Pass /
+> OpenCode Go) now go through one `quotaCard()`: the headline is always the **5-hour window's
+> used %**, the detail line carries **本周 → 本月** used % in that order, and the tooltip repeats
+> every window as `已用 X% · Y 后重置`. Vendors that report the opposite direction are flipped in
+> their own adapter (MiniMax only reports *remaining*). The colour still tracks the worst window,
+> so a nearly-exhausted monthly window warns while the 5-hour headline stays quiet. The MiniMax /
+> Cline snippets below are updated to that rule; `quotaWindow()` / `quotaCard()` are the only entry points.
 
 ```ts
 export type UsageKind = 'balance' | 'quota' | 'tokens'
@@ -363,22 +423,22 @@ auth   Authorization: Bearer <MINIMAX_CN_API_KEY>      // NO GroupId
 guard  if (body.base_resp?.status_code !== 0) -> error { code: 'minimax_' + status_code,
                                                         message: base_resp.status_msg }   // HTTP is 200!
 row    body.model_remains.find(r => r.model_name === 'general')
-value  row.current_interval_remaining_percent          // REMAINING, not used
+value  used = 100 - row.current_interval_remaining_percent   // API reports REMAINING → flip here
 unit   'percent'
-primary `${value}%`
-secondary "5h 剩余"
-detail  `已用 ${100 - value}% · ${hhmm(row.remains_time)} 后重置`
-tone   value <= 20 ? 'error' : value <= 40 ? 'warn' : 'ok'
+primary used !== null ? `${used}%` : '不限' / '—'
+secondary "5 小时已用"
+detail  weekly window only: `本周 ${weeklyUsed}%` or `本周不限`
+tone   used >= 80 ? 'warn' : 'ok'          // red only on the vendor's own `rate-limited` verdict
 window { kind: 'fixed-5h', startAt: row.start_time, endAt: row.end_time, resetInMs: row.end_time - Date.now() }
 ```
 
-**MiniMax weekly window → optional second card / `parts` entry**
+**MiniMax weekly window → the detail line of the same card**
 ```
-value   row.current_weekly_remaining_percent
+value   used = 100 - row.current_weekly_remaining_percent
 window  { kind: 'weekly', startAt: weekly_start_time, endAt: weekly_end_time,
           unlimited: row.current_weekly_status === 3 }
-primary status === 3 ? '∞' : `${percent}%`
-// unlimited ⇒ suppress "used %" rendering and any per-1% estimate
+detail  unlimited ? '本周不限' : `本周 ${used}%`
+// unlimited ⇒ render 不限, never a percentage or a per-1% estimate
 ```
 
 **Cline Pass windows → `kind: 'quota'`**
@@ -387,13 +447,13 @@ url    GET https://api.cline.bot/api/v1/users/me/plan/usage-limits
 auth   Authorization: Bearer <CLINE_PASS_API_KEY>
 retry  on 401/403 AND key matches /^ey[A-Za-z0-9_-]+\./ (OAuth JWT) → Bearer workos:<key>
 rows   data.limits[] = { type: 'five_hour'|'weekly'|'monthly', percentUsed, resetsAt }
-value  MAX(percentUsed) over the three windows
+value  percentUsed per window (already USED)
 unit   'percent'
-primary `${max}%`
-secondary `${windowLabel}已用`          // "本月已用" | "本周已用" | "5 小时已用"
-detail  other windows as `${label} ${pct}%` joined by ' · '
-tone   max >= 80 ? 'warn' : 'ok'
-breakdown  per window `${label} ${pct}% · ${countdown}后重置` + local token note
+primary `${five_hour.percentUsed}%`
+secondary "5 小时已用"
+detail  `本周 ${weekly}% · 本月 ${monthly}%`     // fixed order; a missing window is omitted
+tone   MAX(percentUsed) >= 80 ? 'warn' : 'ok'   // headline is five_hour, colour follows the worst window
+breakdown  per window `${label}已用 ${pct}% · ${countdown}后重置` + local token note
 ```
 
 **Local telemetry → `kind: 'tokens'`** (see §4)
@@ -585,7 +645,11 @@ The 30× gap is `cacheReadTokens`. A "billions of tokens" card is technically tr
 | DeepSeek bad key | `401` `authentication_error` | error card, keep last good value |
 | DeepSeek 404 for usage paths | `404 <empty>` | confirmed no usage endpoint |
 | Network/timeout | not observed; 5–12 s timeouts used | 8 s timeout, TTL cache, never block the hero render |
-| Rate limits | none observed (5 DeepSeek, 3 MiniMax sequential calls, no `X-RateLimit-*`) | still TTL 60 s; do not poll faster |
+| Rate limits | none observed (5 DeepSeek, 3 MiniMax, 10 OpenCode Go sequential calls, no `X-RateLimit-*`) | still TTL 60 s; do not poll faster |
+| OpenCode Go bad/missing key | `401 {"type":"error","error":{"type":"AuthError"}}` | error card |
+| OpenCode Go key in a workspace without Go | `403` (client treats it as “no allowance”) | say “no Go subscription”, not a raw HTTP code |
+| OpenCode Go bogus `x-opencode-org-id` | `400` empty body | never send the header |
+| OpenCode Go trailing slash / non-GET | hangs / `404` | no trailing slash, GET only |
 | Live session file being appended | torn final zstd frame | drop the failing frame, keep the decoded prefix |
 | Projection cache file half-written | `JSON.parse` throw | `try/catch` per file, skip it |
 
