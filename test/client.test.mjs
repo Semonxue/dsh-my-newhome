@@ -198,5 +198,21 @@ function stores(overrides = {}) {
   check('ago renders days', internals.ago(now - 2 * DAY) === '2 天前', internals.ago(now - 2 * DAY))
 }
 
+// The monthly quota reset date appended to the card's detail line.
+{
+  const thisYear = new Date().getFullYear()
+  const at = new Date(thisYear, 10, 21, 18, 35).getTime() // 11 月 21 日, local time
+  check('monthly reset note is a bare m/d date', internals.resetNote({ label: '本月', at }) === '11/21',
+    internals.resetNote({ label: '本月', at }))
+  const otherYear = new Date(thisYear + 1, 0, 5, 9, 0).getTime()
+  check('a reset in another year spells the year out',
+    internals.resetNote({ label: '本月', at: otherYear }) === `${thisYear + 1}/1/5`,
+    internals.resetNote({ label: '本月', at: otherYear }))
+  check('no reset window renders no date', internals.resetNote(null) === '' && internals.resetNote(undefined) === ''
+    && internals.resetNote({ label: '本月', at: 0 }) === '' && internals.resetNote({ label: '本月', at: Number.NaN }) === '')
+  check('a reset instant already in the past renders no date',
+    internals.resetNote({ label: '本月', at: Date.now() - 1_000 }) === '')
+}
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURES`)
 process.exit(failures === 0 ? 0 : 1)

@@ -586,6 +586,25 @@ let usageBody = null
   ])
   check('quota card renders an uncapped window as 不限', unlimited.primary === '不限'
     && unlimited.secondary === '' && unlimited.detail === '本周 50%', `${unlimited.primary}/${unlimited.detail}`)
+  // The monthly window carries its reset instant so the card can print the date itself.
+  const future = Date.now() + 12 * 86_400_000
+  const dated = internals.quotaCard([
+    internals.quotaWindow('rolling', { used: 0 }),
+    internals.quotaWindow('weekly', { used: 10, resetAt: future - 3_600_000 }),
+    internals.quotaWindow('monthly', { used: 95, resetAt: future }),
+  ])
+  check('quota card carries the monthly reset instant',
+    dated.reset?.label === '本月' && dated.reset?.at === future, JSON.stringify(dated.reset))
+  const noMonthly = internals.quotaCard([
+    internals.quotaWindow('rolling', { used: 12 }),
+    internals.quotaWindow('weekly', { used: 10 }),
+  ])
+  check('quota card without a monthly window has no reset note', noMonthly.reset === null, JSON.stringify(noMonthly.reset))
+  const uncappedMonthly = internals.quotaCard([
+    internals.quotaWindow('rolling', { used: 0 }),
+    internals.quotaWindow('monthly', { used: 0, unlimited: true, resetAt: future }),
+  ])
+  check('an uncapped monthly window has nothing to reset', uncappedMonthly.reset === null, JSON.stringify(uncappedMonthly.reset))
   const missing = internals.quotaCard([internals.quotaWindow('weekly', { used: 33 })])
   check('quota card falls back to the only window', missing.primary === '33%' && missing.secondary === '本周已用', `${missing.primary}/${missing.secondary}`)
   check('quota card rejects an empty window set', internals.quotaCard([]) === null)

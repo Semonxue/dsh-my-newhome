@@ -32,6 +32,9 @@
 > 想恢复旧行为，在设置面板里切回「活跃度」。取数时机：每次打开页面 / 回到窗口时自动重读一次，
 > 标题行右侧 `↻` 可随时手动重读。
 
+> 0.5.0 起，Cline Pass / OpenCode Go 的额度卡在「本月 XX%」后面直接标出本月重置日（如 `11/21`），
+> 不用等悬停提示；卡片够宽时自动补上「重置」二字。MiniMax 的接口没有本月窗口，所以那张卡没有日期。
+
 ## 组件行（API 用量）
 
 数据 60 秒缓存、默认 5 分钟轮询（1–60 可调）；取数失败显示 `—` 和原因，不影响其它卡片。
@@ -39,13 +42,17 @@
 | 供应商 | 显示 | 来源 |
 |---|---|---|
 | DeepSeek | 余额 | 官方余额接口 |
-| MiniMax | 大字 5 小时已用 %，小字本周已用 %（本周不限显示「不限」） | coding-plan 配额接口 |
-| Cline Pass | 大字 5 小时已用 %，小字本周 / 本月已用 % | 订阅额度接口，悬停看重置时间 |
-| OpenCode Go | 与 Cline Pass 同款；`rate-limited` 时整卡转红并提示 Extra Usage | Go 订阅用量接口，悬停看重置时间与本机 token 累计 |
+| MiniMax | 大字 5 小时已用 %，小字本周已用 %（本周不限显示「不限」） | coding-plan 配额接口（只上报 5 小时 + 本周两个窗口，没有本月额度） |
+| Cline Pass | 大字 5 小时已用 %，小字本周 / 本月已用 %，本月后跟重置日（如 `11/21`） | 订阅额度接口，悬停看各窗倒计时与本机 token 累计 |
+| OpenCode Go | 与 Cline Pass 同款；`rate-limited` 时整卡转红并提示 Extra Usage | Go 订阅用量接口，悬停看各窗倒计时与本机 token 累计 |
 | 其它 | 本机 token 累计 | `session_projcache` 投影统计 |
 
 三个额度组件口径统一：**大字 = 5 小时窗已用 %，小字 = 本周、本月已用 %**（同一顺序、同一方向）；
 颜色跟**最满的那个窗口**走（任一窗口 ≥80% 转黄，厂商明确报 `rate-limited` 才转红），大字仍然是 5 小时窗。
+有本月窗口的卡（Cline Pass / OpenCode Go）把小字收成 `本周 38% · 本月 95% · 11/21`：紧跟在「本月」后面的
+日期就是本月窗口的重置日，不用等悬停。卡片够宽（三张一排或窗口更宽）时补上「重置」二字，四张挤一排时只留日期。
+精确到分钟的倒计时仍在悬停提示里。MiniMax 的 coding plan 接口只给 5 小时和本周两个窗口，没有本月额度，
+所以那一张没有日期，不是漏了。
 
 key 从 `$DSH_HOME/.credentials.yaml` 读，永不下发浏览器。加供应商：`lib/index.js` 的 `PROVIDER_DEFS`
 加一条，再在 `lib/client.js` 的 `WIDGET_PROVIDERS` 加下拉项即可。
@@ -64,8 +71,8 @@ $DSH_HOME/dsh-my-newhome/
 ## 开发
 
 ```bash
-node test/host.test.mjs      # 宿主半边 102 条断言
-node test/client.test.mjs    # 浏览器半边 26 条断言（排序契约）
+node test/host.test.mjs      # 宿主半边 106 条断言
+node test/client.test.mjs    # 浏览器半边 31 条断言（排序契约 / 重置日格式）
 ```
 
 `preview.html` 是静态预览页。布局方向的自由网格原型在

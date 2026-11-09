@@ -112,10 +112,13 @@ html[data-dshh-hero-only] [class*="composerStack"]:not([class*="composerHero"]) 
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dshh-deck-links .dshh-card{min-height:56px}
 
-/* Usage widgets: same footprint family as a workspace card, three short lines. */
+/* Usage widgets: same footprint as a workspace card — three short lines. A quota card
+   appends the monthly reset date to the detail line; the card is a query container so the
+   word 重置 only appears when there is room for it (narrow cards keep the bare date). */
 .dshh-deck-widgets{grid-template-columns:repeat(3,minmax(0,1fr))}
 .dshh-deck-widgets[data-count="4"]{grid-template-columns:repeat(4,minmax(0,1fr))}
 .dshh-widget{display:flex;flex-direction:column;gap:1px;min-width:0;min-height:64px;padding:9px 12px;border-radius:12px;
+  container-type:inline-size;
   box-sizing:border-box;text-align:left;font:inherit;cursor:pointer;
   background:color-mix(in srgb,var(--dsw-alias-bg-layer-1,#15181d) 76%,transparent);
   border:1px solid color-mix(in srgb,var(--dsw-alias-border-l1,#23262c) 90%,transparent);
@@ -135,6 +138,9 @@ html[data-dshh-hero-only] [class*="composerStack"]:not([class*="composerHero"]) 
 .dshh-widget-unit{margin-left:4px;font-size:10.5px;font-weight:500;font-style:normal;color:var(--dsw-alias-label-tertiary,#767c88)}
 .dshh-widget-detail{font-size:10.5px;line-height:1.25;color:var(--dsw-alias-label-tertiary,#767c88);
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dshh-widget-reset{font-variant-numeric:tabular-nums}
+.dshh-widget-reset-word{display:none}
+@container (min-width:168px){.dshh-widget-reset-word{display:inline}}
 .dshh-widget[data-tone="warn"] .dshh-widget-value{color:#e0a33a}
 .dshh-widget[data-tone="error"] .dshh-widget-value{color:#e0635b}
 .dshh-widget-edit{display:flex;align-items:center;gap:8px}
@@ -259,12 +265,12 @@ input[type="color"].dshh-color{width:72px!important;flex:none;cursor:pointer}
       <button type="button" class="dshh-widget" data-tone="ok" title="Cline Pass · 5 小时已用&#10;本周 9% · 本月 35%&#10;5 小时已用 22% · 35 分后重置；本周已用 9% · 6 天 19 小时后重置；本月已用 35% · 17 天后重置&#10;40.0M tokens（本机 96 个会话 · 7 天内 12 个活跃）&#10;点击刷新">
         <span class="dshh-widget-top"><span class="dshh-widget-dot" style="background:#7c5cff">C</span><span class="dshh-widget-label">Cline Pass</span></span>
         <span class="dshh-widget-value">22%<em class="dshh-widget-unit">5 小时已用</em></span>
-        <span class="dshh-widget-detail">本周 9% · 本月 35%</span>
+        <span class="dshh-widget-detail">本周 9% · 本月 35%<span class="dshh-widget-reset"> · 11/21<span class="dshh-widget-reset-word"> 重置</span></span></span>
       </button>
       <button type="button" class="dshh-widget" data-tone="ok" title="OpenCode Go · 5 小时已用&#10;本周 9% · 本月 21%&#10;5 小时已用 3% · 4 小时 12 分后重置；本周已用 9% · 2 天 5 小时后重置；本月已用 21% · 29 天 23 小时后重置&#10;979.2K tokens（本机 4 个会话 · 7 天内 4 个活跃）&#10;点击刷新">
         <span class="dshh-widget-top"><span class="dshh-widget-dot" style="background:#5a5858">G</span><span class="dshh-widget-label">OpenCode Go</span></span>
         <span class="dshh-widget-value">3%<em class="dshh-widget-unit">5 小时已用</em></span>
-        <span class="dshh-widget-detail">本周 9% · 本月 21%</span>
+        <span class="dshh-widget-detail">本周 9% · 本月 21%<span class="dshh-widget-reset"> · 12/7<span class="dshh-widget-reset-word"> 重置</span></span></span>
       </button>
   </div>
         <div class="composer-card">
